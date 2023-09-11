@@ -1,6 +1,7 @@
-import serial
-import pygame
-import time
+# import pygame
+# import time
+import usb.core
+import usb.util
 
 """
 # Initialize pygame and joystick
@@ -50,25 +51,42 @@ finally:
 # CRSF protocol constants
 CRSF_FRAMETYPE_RC_CHANNELS_PACKED = 0x16
 
-# Replace with your serial port name
-serial_port = "/dev/ttyUSB0"  # Example for Linux, use COMx for Windows
+vendor_id = 0x04d8
+product_id = 0xf94c
 
-# Open the serial port
-ser = serial.Serial(serial_port, baudrate=115200, timeout=1)
+tracer = usb.core.find(idVendor=vendor_id, idProduct=product_id)
+
+if tracer is None:
+    raise ValueError("Device Not Found")
+else:
+    print("Found tracer!")
+
+endpoint = 0x1
+interface = tracer[0].interfaces()[0].bInterfaceNumber
+
+if tracer.is_kernel_driver_active(interface):
+    try:
+        tracer.detach_kernel_driver(interface)
+    except usb.core.USBError as e:
+        sys.exit("could not detach kernel driver from interface")
+
+"""
+for cfg in tracer:
+    for intf in cfg:
+        for ep in intf:
+            print(f"Endpoint Address: {ep.bEndpointAddress}")
+            print(f"Transfer Type: {usb.util.endpoint_type(ep.bmAttributes)}")
+"""
+
 
 # Function to send a CRSF packet
 def send_crsf_packet(packet_data):
-    # Calculate CRC
     crc = sum(packet_data) & 0xFF
-
-    # Construct the complete packet
-    complete_packet = [0xC8, len(packet_data) + 2, CRSF_FRAMETYPE_RC_CHANNELS_PACKED] + packet_data + [crc]
-
-    # Send the CRSF packet
-    ser.write(bytes(complete_packet))
+    complete_packet = [0xEE, len(packet_data) + 2, CRSF_FRAMETYPE_RC_CHANNELS_PACKED] + packet_data + [crc]
+    tracer.write(endpoint, bytes(complete_packet))
 
 # Replace with your RC channel values (11-bit values, little-endian)
-rc_channels = [1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500]
+rc_channels = [15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15]
 
 # Convert RC channel values to 11-bit little-endian representation
 rc_data = []
@@ -79,5 +97,3 @@ for value in rc_channels:
 # Send the CRSF packet with RC channel data
 send_crsf_packet(rc_data)
 
-# Close the serial port when done
-ser.close()
